@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fate · SANGQIAO
+    </title>
+    <style>
+        /* ----- 全局重置 & 基础 ----- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', 'Cinzel', 'Noto Serif SC', serif;
+            background: #0b090a;
+            color: #e8dcc8;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* ----- 召唤全屏图层 ----- */
+        #summon-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(ellipse at center, #1a1210 0%, #0b090a 80%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 1.2s ease;
+            /* 褪去由 JS 控制 */
+        }
+
+        /* 召唤文字主体 */
+        .summon-text {
+            font-size: clamp(2.4rem, 10vw, 6rem);
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-align: center;
+            color: #f0e6d3;
+            text-shadow:
+                0 0 20px rgba(200, 160, 120, 0.3),
+                0 0 60px rgba(200, 160, 120, 0.15),
+                0 0 120px rgba(180, 130, 80, 0.08);
+            position: relative;
+            padding: 0 1rem;
+            animation: glowPulse 2.4s ease-in-out infinite alternate;
+        }
+
+        /* 装饰性符文线条 */
+        .summon-text::before,
+        .summon-text::after {
+            content: '✦';
+            position: absolute;
+            font-size: 0.5em;
+            color: #c9a87c;
+            opacity: 0.6;
+            animation: floatRune 3s ease-in-out infinite alternate;
+        }
+        .summon-text::before {
+            left: -0.8em;
+            top: -0.2em;
+        }
+        .summon-text::after {
+            right: -0.8em;
+            bottom: -0.2em;
+            animation-delay: 1.5s;
+        }
+
+        /* 褪去状态（由 JS 添加类） */
+        #summon-layer.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* ----- 名片容器 ----- */
+        #card-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at 30% 40%, #1e1614 0%, #0b090a 90%);
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 1.8s ease 0.3s;
+            padding: 1.5rem;
+        }
+
+        #card-container.visible {
+            opacity: 1;
+        }
+
+        /* ----- 名片卡片 (Fate风格) ----- */
+        .card {
+            position: relative;
+            max-width: 640px;
+            width: 100%;
+            background: linear-gradient(145deg, #1c1411, #0f0b09);
+            border: 1px solid rgba(200, 170, 140, 0.25);
+            border-radius: 2.5rem 2.5rem 2rem 2rem;
+            padding: 2.8rem 2.8rem 2.8rem 2.8rem;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.8),
+                inset 0 1px 0 rgba(220, 190, 160, 0.08),
+                0 0 80px rgba(160, 120, 80, 0.06);
+            backdrop-filter: blur(2px);
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+            overflow: hidden;
+        }
+
+        /* 装饰性边框线 */
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 1px solid rgba(200, 170, 140, 0.12);
+            border-radius: 2rem;
+            pointer-events: none;
+        }
+
+        /* 顶部装饰纹 */
+        .card::after {
+            content: '◈ ◈ ◈';
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            letter-spacing: 0.5rem;
+            color: rgba(200, 170, 140, 0.2);
+            pointer-events: none;
+        }
+
+        /* 名片头部：真名 + 职阶 */
+        .card-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(200, 170, 140, 0.15);
+            padding-bottom: 1.2rem;
+            margin-bottom: 1.8rem;
+            flex-wrap: wrap;
+            gap: 0.4rem 0.8rem;
+        }
+
+        .true-name {
+            font-size: clamp(2rem, 6vw, 3.2rem);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: #f0e6d3;
+            text-shadow: 0 0 30px rgba(200, 160, 120, 0.1);
+        }
+
+        .true-name small {
+            font-size: 0.4em;
+            font-weight: 400;
+            opacity: 0.5;
+            margin-left: 0.3em;
+            letter-spacing: 0.1em;
+        }
+
+        .class-title {
+            font-size: clamp(0.9rem, 2vw, 1.2rem);
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            color: #c9a87c;
+            background: rgba(200, 170, 140, 0.08);
+            padding: 0.3rem 1rem 0.3rem 1.2rem;
+            border-radius: 40px;
+            border: 1px solid rgba(200, 170, 140, 0.15);
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        /* 信息列表 */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin: 1.8rem 0 2rem 0;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: baseline;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .info-item:hover {
+            background: rgba(200, 170, 140, 0.04);
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            color: rgba(200, 180, 160, 0.5);
+            min-width: 5.2em;
+            text-transform: uppercase;
+            font-family: 'Cinzel', 'Times New Roman', serif;
+        }
+
+        .info-value {
+            font-size: 1.2rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            color: #f0e6d3;
+            word-break: break-all;
+        }
+
+        .info-value.highlight {
+            color: #dac29c;
+            text-shadow: 0 0 20px rgba(200, 170, 140, 0.08);
+        }
+
+        .info-value .rune {
+            font-size: 0.7em;
+            opacity: 0.4;
+            margin: 0 0.2em;
+        }
+
+        /* 宝具特殊样式 */
+        .noble-phantasm {
+            background: linear-gradient(90deg, rgba(200, 170, 140, 0.05), transparent);
+            padding: 0.6rem 0.6rem 0.6rem 1rem;
+            border-radius: 12px;
+            border-left: 2px solid rgba(200, 170, 140, 0.2);
+            margin-top: 0.2rem;
+        }
+
+        .noble-phantasm .info-label {
+            min-width: 5.2em;
+        }
+
+        .noble-phantasm .info-value {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #e6d4b8;
+            letter-spacing: 0.12em;
+            text-shadow: 0 0 30px rgba(200, 170, 140, 0.06);
+        }
+
+        /* 联系方式区域 */
+        .contact-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem 1.8rem;
+            margin-top: 0.8rem;
+            padding-top: 1.4rem;
+            border-top: 1px solid rgba(200, 170, 140, 0.1);
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            color: rgba(220, 200, 180, 0.6);
+            letter-spacing: 0.04em;
+        }
+
+        .contact-item .contact-icon {
+            font-size: 1.1rem;
+            opacity: 0.5;
+        }
+
+        .contact-item .contact-value {
+            color: #e8dcc8;
+            font-weight: 400;
+            letter-spacing: 0.06em;
+        }
+
+        /* 底部小印章 */
+        .card-footer {
+            margin-top: 2rem;
+            display: flex;
+            justify-content: flex-end;
+            font-size: 0.6rem;
+            letter-spacing: 0.3em;
+            color: rgba(200, 170, 140, 0.15);
+            text-transform: uppercase;
+            font-family: 'Cinzel', serif;
+        }
+
+        /* ----- 动画 Keyframes ----- */
+        @keyframes glowPulse {
+            0% {
+                text-shadow: 0 0 20px rgba(200, 160, 120, 0.2), 0 0 60px rgba(200, 160, 120, 0.05);
+            }
+            100% {
+                text-shadow: 0 0 40px rgba(200, 160, 120, 0.35), 0 0 100px rgba(200, 160, 120, 0.12), 0 0 180px rgba(180, 130, 80, 0.05);
+            }
+        }
+
+        @keyframes floatRune {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 0.4;
+            }
+            100% {
+                transform: translateY(-8px) rotate(12deg);
+                opacity: 0.8;
+            }
+        }
+
+        /* ----- 响应式调整 ----- */
+        @media (max-width: 540px) {
+            .card {
+                padding: 2rem 1.6rem 2rem 1.6rem;
+                border-radius: 2rem;
+            }
+            .card::before {
+                inset: 6px;
+                border-radius: 1.6rem;
+            }
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.2rem;
+            }
+            .class-title {
+                font-size: 0.75rem;
+                padding: 0.2rem 0.8rem;
+            }
+            .info-item {
+                flex-wrap: wrap;
+                gap: 0.1rem 0.2rem;
+                padding: 0.3rem 0;
+            }
+            .info-label {
+                min-width: 4.2em;
+                font-size: 0.7rem;
+            }
+            .info-value {
+                font-size: 1rem;
+            }
+            .noble-phantasm .info-value {
+                font-size: 1.1rem;
+            }
+            .contact-section {
+                gap: 0.4rem 1rem;
+            }
+            .contact-item {
+                font-size: 0.8rem;
+            }
+            .summon-text {
+                font-size: clamp(1.8rem, 12vw, 3.2rem);
+            }
+            .summon-text::before,
+            .summon-text::after {
+                display: none;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .card {
+                padding: 1.6rem 1.2rem;
+            }
+            .true-name {
+                font-size: 1.8rem;
+            }
+            .info-value {
+                font-size: 0.9rem;
+            }
+            .noble-phantasm .info-value {
+                font-size: 1rem;
+            }
+        }
+
+        /* 优雅的加载过渡 */
+        #summon-layer {
+            will-change: opacity;
+        }
+        #card-container {
+            will-change: opacity;
+        }
+
+        /* 小装饰 — 角落纹章 */
+        .crest {
+            position: absolute;
+            bottom: 20px;
+            right: 24px;
+            font-size: 0.7rem;
+            opacity: 0.08;
+            letter-spacing: 0.2em;
+            font-family: 'Cinzel', serif;
+            pointer-events: none;
+            color: #c9a87c;
+        }
+
+        /* 防止名片内容溢出 */
+        .card-content {
+            position: relative;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====== 召唤全屏层 ====== -->
+    <div id="summon-layer">
+        <div class="summon-text">试问，你就是我的御主吗</div>
+    </div>
+
+    <!-- ====== 名片容器 ====== -->
+    <div id="card-container">
+        <div class="card">
+
+            <div class="card-content">
+
+                <!-- 头部：真名 + 职阶 -->
+                <div class="card-header">
+                    <span class="true-name">
+                        桑桥
+                        <small>· 从者</small>
+                    </span>
+                    <span class="class-title">PHOTOGRAPHER</span>
+                </div>
+
+                <!-- 信息列表 -->
+                <div class="info-list">
+
+                    <!-- 真名（重复强调，但保持风格） -->
+                    <div class="info-item">
+                        <span class="info-label">真名</span>
+                        <span class="info-value highlight">桑桥</span>
+                    </div>
+
+                    <!-- 职阶 -->
+                    <div class="info-item">
+                        <span class="info-label">职阶</span>
+                        <span class="info-value">摄影</span>
+                    </div>
+
+                    <!-- 宝具 (特殊样式) -->
+                    <div class="info-item noble-phantasm">
+                        <span class="info-label">宝具</span>
+                        <span class="info-value">瞬间永恒定格</span>
+                    </div>
+                    <div class="info-item noble-phantasm">
+                        <span class="info-label">宝具</span>
+                        <span class="info-value">GOD COW LIGHT GROUP</span>
+                    </div>
+                </div>
+
+                <!-- 联系方式 -->
+                <div class="contact-section">
+                    <div class="contact-item">
+                        <span class="contact-icon">✧</span>
+                        <span class="contact-value">QQ 3210107627</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon">✧</span>
+                        <span class="contact-value">WeChat · SunqJao</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon">✧</span>
+                        <span class="contact-value"><a href="https://www.xiaohongshu.com/user/profile/66189ed900000000070073c3">例图</a></span>
+                    </div>
+                </div>
+
+                <!-- 底部装饰 -->
+                <div class="card-footer">
+                    <span>— 契约成立 —</span>
+                </div>
+
+            </div>
+
+            <!-- 角落纹章 -->
+            <div class="crest">◈ 8.9 深马 · 8.15 广马 · 8.22 萤火虫 ◈</div>
+
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            const summonLayer = document.getElementById('summon-layer');
+            const cardContainer = document.getElementById('card-container');
+
+            // 1 秒后触发褪去
+            setTimeout(function() {
+                // 召唤层淡出
+                summonLayer.classList.add('fade-out');
+
+                // 名片渐入 (延迟匹配褪去动画)
+                setTimeout(function() {
+                    cardContainer.classList.add('visible');
+                }, 300); // 稍等片刻，让召唤层淡出更平滑
+
+            }, 1000); // 显示 1 秒
+
+            // （可选）如果用户点击召唤层，可提前跳过 —— 增加交互感
+            summonLayer.addEventListener('click', function() {
+                if (!summonLayer.classList.contains('fade-out')) {
+                    summonLayer.classList.add('fade-out');
+                    setTimeout(function() {
+                        cardContainer.classList.add('visible');
+                    }, 300);
+                }
+            });
+
+            // 键盘空格 / 回车也可跳过
+            document.addEventListener('keydown', function(e) {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    if (!summonLayer.classList.contains('fade-out')) {
+                        summonLayer.classList.add('fade-out');
+                        setTimeout(function() {
+                            cardContainer.classList.add('visible');
+                        }, 300);
+                    }
+                }
+            });
+
+        })();
+    </script>
+
+</body>
+</html>
